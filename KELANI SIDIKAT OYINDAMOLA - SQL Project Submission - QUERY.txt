@@ -1,0 +1,94 @@
+/* Query 1 - query used for first insight*/
+
+SELECT category_name,
+		standard_quartile,
+        COUNT(*)
+FROM
+	(SELECT c.name category_name,
+        NTILE(4) OVER (ORDER BY f.rental_duration) AS standard_quartile
+FROM category c
+JOIN film_category fc 
+ON c.category_id = fc.category_id
+JOIN film f
+ON fc.film_id = f.film_id
+WHERE c.name IN ('Animation', 'Children', 'Classics', 'Comedy', 'Family', 'Music')
+     ) AS t1
+GROUP BY 1,2
+ORDER BY 1,2;
+
+
+
+/* Query 2 - query used for second insight*/
+
+SELECT 
+		EXTRACT(MONTH FROM r.rental_date) AS rental_month,
+		EXTRACT(YEAR FROM r.rental_date) AS rental_year,
+        i.store_id,
+        COUNT(r.rental_id) AS count_rental
+FROM rental r
+JOIN inventory i
+ON i.inventory_id = r.inventory_id
+GROUP BY 1,2,3
+ORDER BY 1,2;
+
+
+/* Query 3 - query used for third insight*/
+
+WITH t1 AS (
+SELECT 
+		DATE_TRUNC('MONTH', p.payment_date) AS pay_mon,
+		CONCAT(c.first_name, ' ', c.last_name) AS fullname,
+        COUNT(*) AS pay_countpermon,
+        SUM(p.amount) AS pay_amount
+FROM payment p
+JOIN customer c
+ON p.customer_id = c.customer_id
+WHERE p.payment_date BETWEEN '2007-01-01' AND '2007-12-31'
+GROUP BY 1,2
+ORDER BY 4 DESC
+LIMIT 11
+		)
+SELECT pay_mon,
+		fullname,
+  		pay_countpermon,
+  		pay_amount
+FROM t1
+ORDER BY 2,1;
+
+
+/* Query 4 - query used for fourth insight*/
+
+WITH t1 AS (
+SELECT 
+		DATE_TRUNC('MONTH', p.payment_date) AS pay_mon,
+		CONCAT(c.first_name, ' ', c.last_name) AS fullname,
+        COUNT(*) AS pay_countpermon,
+        SUM(p.amount) AS pay_amount
+FROM payment p
+JOIN customer c
+ON p.customer_id = c.customer_id
+WHERE p.payment_date BETWEEN '2007-01-01' AND '2007-12-31'
+GROUP BY 1,2
+ORDER BY 4 DESC
+		),
+	t2 AS (
+SELECT t1.pay_mon AS payment_month,
+		t1.fullname AS full_name,
+      	t1.pay_amount AS payment_amount, 
+		LEAD(t1.pay_amount) OVER (PARTITION BY t1.fullname ORDER BY t1.pay_mon) AS lead_pay_amount,
+    t1.pay_amount - LEAD(t1.pay_amount) OVER (PARTITION BY t1.fullname ORDER BY t1.pay_mon) AS pay_difference
+FROM t1
+      )
+	SELECT t2.payment_month,
+    		t2.full_name,
+            t2.payment_amount,
+            t2.pay_difference,
+            CASE WHEN t2.pay_difference = 
+            	(SELECT MAX(t2.pay_difference) 
+                 FROM t2) 
+			THEN 'this is the maximum difference' 
+    		ELSE NULL END AS is_max_difference
+	FROM t2
+    WHERE t2.full_name IN ('Arnold Havens', 'Clara Shaw', 'Curtis Irby','Daisy Bates', 'Eleanor Hunt', 'Gordon Allard', 'Karl Seal', 'Marsha Douglas', 'Rhonda Kennedy', 'Tommy Collazo')
+    ORDER BY 3 DESC;
+
